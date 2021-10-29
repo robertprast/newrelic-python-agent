@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import logging
+#import os
 
 from collections import namedtuple
 
@@ -83,6 +84,7 @@ _TRANSACTION_EVENT_DEFAULT_ATTRIBUTES = set((
         "code.function",
         "code.lineno",
         "code.namespace",
+        "service.version",
 ))
 
 MAX_NUM_USER_ATTRIBUTES = 128

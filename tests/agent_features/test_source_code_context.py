@@ -39,6 +39,7 @@ if FILE_PATH.endswith(".pyc"):
                 "code.function": "exercise_function",
                 "code.lineno": 14,
                 "code.namespace": NAMESPACE,
+                "service.version": 'v4.3.2',
             },
         ),
         (  # Method
@@ -48,6 +49,7 @@ if FILE_PATH.endswith(".pyc"):
                 "code.function": "exercise_method",
                 "code.lineno": 19,
                 "code.namespace": CLASS_NAMESPACE,
+                "service.version": 'v4.3.2',
             },
         ),
         (  # Static Method
@@ -57,6 +59,7 @@ if FILE_PATH.endswith(".pyc"):
                 "code.function": "exercise_static_method",
                 "code.lineno": 22,
                 "code.namespace": FUZZY_NAMESPACE,
+                "service.version": 'v4.3.2',
             },
         ),
         (  # Class Method
@@ -66,6 +69,7 @@ if FILE_PATH.endswith(".pyc"):
                 "code.function": "exercise_class_method",
                 "code.lineno": 26,
                 "code.namespace": CLASS_NAMESPACE,
+                "service.version": 'v4.3.2',
             },
         ),
         (  # Callable object
@@ -75,6 +79,7 @@ if FILE_PATH.endswith(".pyc"):
                 "code.function": "__call__",
                 "code.lineno": 30,
                 "code.namespace": CLASS_NAMESPACE,
+                "service.version": 'v4.3.2',
             },
         ),
         (  # Lambda
@@ -84,6 +89,7 @@ if FILE_PATH.endswith(".pyc"):
                 "code.function": "<lambda>",
                 "code.lineno": 36,
                 "code.namespace": NAMESPACE,
+                "service.version": 'v4.3.2',
             },
         ),
     ),

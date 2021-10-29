@@ -19,6 +19,7 @@ import sys
 import time
 import traceback
 import warnings
+import os
 
 from newrelic.api.settings import STRIP_EXCEPTION_MESSAGE
 from newrelic.common.object_names import parse_exc_info, callable_name, object_context
@@ -198,6 +199,12 @@ class TimeTrace(object):
         self.user_attributes[key] = value
 
     def add_code(self, func):
+        serviceVersion = None
+        try:
+            serviceVersion = os.getenv('service.version')
+        except AttributeError:
+            pass
+
         """Extract source code context from a callable and add appropriate attributes."""
         # Fully unwrap object
         while hasattr(func, "__wrapped__") and func.__wrapped__ is not None:
@@ -247,6 +254,7 @@ class TimeTrace(object):
         # Add callable naming attributes
         self._add_agent_attribute("code.namespace", namespace)
         self._add_agent_attribute("code.function", func_name)
+        self._add_agent_attribute("service.version", serviceVersion)
 
     def _observe_exception(self, exc_info=None, ignore=None, expected=None, status_code=None):
         # Bail out if the transaction is not active or
