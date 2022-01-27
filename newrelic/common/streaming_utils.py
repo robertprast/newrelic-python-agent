@@ -70,7 +70,9 @@ class StreamBuffer(object):
                 raise StopIteration
 
             try:
-                return self._queue.popleft()
+                _previous = self._queue.popleft()
+                self._previous = _previous
+                return _previous
             except IndexError:
                 pass
 
@@ -83,6 +85,12 @@ class StreamBuffer(object):
     def __iter__(self):
         return self
 
+    def rewind(self):
+        with self._notify:
+            _previous = self._previous
+            if _previous is not None:
+                self.put(_previous)
+                self._previous = None
 
 class SpanProtoAttrs(dict):
     def __init__(self, *args, **kwargs):

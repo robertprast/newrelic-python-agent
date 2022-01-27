@@ -114,6 +114,13 @@ class StreamingRpc(object):
                             "response code. The agent will attempt "
                             "to reestablish the stream immediately."
                         )
+
+                        # Reconnect channel for load balancing
+                        self.channel.close()
+                        self.notify.wait(15)
+                        self.request_iterator.rewind()
+                        self.create_channel()
+
                     else:
                         self.record_metric(
                             "Supportability/InfiniteTracing/Span/Response/Error",
@@ -159,6 +166,7 @@ class StreamingRpc(object):
                             break
                         else:
                             _logger.debug("Attempting to reconnect Streaming RPC.")
+                            self.request_iterator.rewind()
                             self.create_channel()
 
                 if self.closed:
