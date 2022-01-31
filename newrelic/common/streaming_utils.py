@@ -29,6 +29,7 @@ class StreamBuffer(object):
         self._shutdown = False
         self._seen = 0
         self._dropped = 0
+        self.stream = None
 
     @staticmethod
     def condition(*args, **kwargs):
@@ -70,9 +71,16 @@ class StreamBuffer(object):
                 raise StopIteration
 
             try:
-                _previous = self._queue.popleft()
-                self._previous = _previous
-                return _previous
+                item = self._queue.popleft()
+                if self.stream is not None and self.stream.done():
+                    # When a gRPC stream receives a server side disconnect (usually in the form of an OK code)
+                    # the item it is waiting to consume from the iterator will not be sent, and
+                    # will inevitably be lost. It must still be given a valid message to deserialize
+                    # or the consumption thread will crash. To workaround this, we retransmit the lost
+                    # message by adding it to the back of the queue.
+                    
+                    self.put(item)
+                return item
             except IndexError:
                 pass
 
@@ -85,12 +93,6 @@ class StreamBuffer(object):
     def __iter__(self):
         return self
 
-    def rewind(self):
-        with self._notify:
-            _previous = self._previous
-            if _previous is not None:
-                self.put(_previous)
-                self._previous = None
 
 class SpanProtoAttrs(dict):
     def __init__(self, *args, **kwargs):

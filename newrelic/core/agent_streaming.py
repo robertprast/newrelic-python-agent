@@ -68,6 +68,12 @@ class StreamingRpc(object):
 
         self.rpc = self.channel.stream_stream(self.PATH, Span.SerializeToString, RecordStatus.FromString)
 
+    def create_response_iterator(self):
+        response_iterator = self.rpc(self.request_iterator, metadata=self.metadata)
+        self.request_iterator.stream = response_iterator
+        return response_iterator
+
+
     @staticmethod
     def condition(*args, **kwargs):
         return threading.Condition(*args, **kwargs)
@@ -117,8 +123,7 @@ class StreamingRpc(object):
 
                         # Reconnect channel for load balancing
                         self.channel.close()
-                        self.notify.wait(15)
-                        self.request_iterator.rewind()
+                        # self.notify.wait(3)
                         self.create_channel()
 
                     else:
@@ -166,13 +171,12 @@ class StreamingRpc(object):
                             break
                         else:
                             _logger.debug("Attempting to reconnect Streaming RPC.")
-                            self.request_iterator.rewind()
                             self.create_channel()
 
                 if self.closed:
                     break
 
-                response_iterator = self.rpc(self.request_iterator, metadata=self.metadata)
+                response_iterator = self.create_response_iterator()
                 _logger.info("Streaming RPC connect completed.")
 
             try:
