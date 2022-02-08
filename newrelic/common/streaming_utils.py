@@ -29,7 +29,6 @@ class StreamBuffer(object):
         self._shutdown = False
         self._seen = 0
         self._dropped = 0
-        self.stream = None
 
     @staticmethod
     def condition(*args, **kwargs):
@@ -39,6 +38,11 @@ class StreamBuffer(object):
         with self._notify:
             self._shutdown = True
             self._notify.notify_all()
+
+    def reconnect(self):
+        with self._notify:
+            self._shutdown = False
+            # self.stream = stream
 
     def put(self, item):
         with self._notify:
@@ -66,27 +70,27 @@ class StreamBuffer(object):
         return seen, dropped
 
     def __next__(self):
-        while True:
-            if self._shutdown:
-                raise StopIteration
+        with self._notify:
+            while True:
+                if self._shutdown:
+                    raise StopIteration
 
-            try:
-                item = self._queue.popleft()
-                if self.stream is not None and self.stream.done():
+                try:
+                    item = self._queue.popleft()
                     # When a gRPC stream receives a server side disconnect (usually in the form of an OK code)
                     # the item it is waiting to consume from the iterator will not be sent, and
                     # will inevitably be lost. It must still be given a valid message to deserialize
                     # or the consumption thread will crash. To workaround this, we retransmit the lost
                     # message by adding it to the back of the queue.
-                    
-                    self.put(item)
-                return item
-            except IndexError:
-                pass
+                    return item
+                except IndexError:
+                    pass
 
-            with self._notify:
                 if not self._shutdown and not self._queue:
                     self._notify.wait()
+                    # # Check for shutdown without releasing lock to prevent data loss on shutdown
+                    # if self._shutdown:
+                    #     raise StopIteration
 
     next = __next__
 
