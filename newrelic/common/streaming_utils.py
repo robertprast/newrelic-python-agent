@@ -21,14 +21,19 @@ except:
     AttributeValue = None
 
 
+import logging
+logger = logging.getLogger(__name__)
+
 class StreamBuffer(object):
 
     def __init__(self, maxlen):
         self._queue = collections.deque(maxlen=maxlen)
         self._notify = self.condition()
         self._shutdown = False
+        self._disconnect = False
         self._seen = 0
         self._dropped = 0
+        self._stream = None
 
     @staticmethod
     def condition(*args, **kwargs):
@@ -39,10 +44,15 @@ class StreamBuffer(object):
             self._shutdown = True
             self._notify.notify_all()
 
+    def disconnect(self):
+        with self._notify:
+            self._disconnect = True
+            self._stream = None
+            self._notify.notify_all()
+
     def reconnect(self):
         with self._notify:
-            self._shutdown = False
-            # self.stream = stream
+            self._disconnect = False
 
     def put(self, item):
         with self._notify:
@@ -70,27 +80,25 @@ class StreamBuffer(object):
         return seen, dropped
 
     def __next__(self):
-        with self._notify:
-            while True:
-                if self._shutdown:
+        while True:
+            with self._notify:
+                if self._shutdown or self._disconnect or (self._stream and self._stream.code() is not None):
+                    # When a gRPC stream receives a server side disconnect (usually in the form of an OK code)
+                    # the item it is waiting to consume from the iterator will not be sent, and
+                    # will inevitably be lost.
+
+                    # StopIteration raised when the StreamBuffer has been shutdown, during a reconnect,
+                    # or when the stream is about to close and will lose the next item in the queue
+                    logger.debug("Stream buffer disconnected or shutdown. Refusing to iterate.")
                     raise StopIteration
 
                 try:
-                    item = self._queue.popleft()
-                    # When a gRPC stream receives a server side disconnect (usually in the form of an OK code)
-                    # the item it is waiting to consume from the iterator will not be sent, and
-                    # will inevitably be lost. It must still be given a valid message to deserialize
-                    # or the consumption thread will crash. To workaround this, we retransmit the lost
-                    # message by adding it to the back of the queue.
-                    return item
+                    return self._queue.popleft()
                 except IndexError:
                     pass
 
-                if not self._shutdown and not self._queue:
+                if not self._shutdown and not self._disconnect and not self._queue:
                     self._notify.wait()
-                    # # Check for shutdown without releasing lock to prevent data loss on shutdown
-                    # if self._shutdown:
-                    #     raise StopIteration
 
     next = __next__
 
