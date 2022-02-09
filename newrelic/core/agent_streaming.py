@@ -167,6 +167,7 @@ class StreamingRpc(object):
                             )
 
                         # Reconnect channel with backoff
+                        self.request_iterator.disconnect()
                         self.channel.close()
                         self.notify.wait(retry_time)
                         if self.closed:

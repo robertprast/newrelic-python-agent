@@ -51,8 +51,7 @@ class StreamBuffer(object):
             self._notify.notify_all()
 
     def reconnect(self):
-        with self._notify:
-            self._disconnect = False
+        self._disconnect = False
 
     def put(self, item):
         with self._notify:
