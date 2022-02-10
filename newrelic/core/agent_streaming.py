@@ -48,7 +48,8 @@ class StreamingRpc(object):
         self._endpoint = endpoint
         self._ssl = ssl
         self.metadata = metadata
-        self.request_iterator = stream_buffer
+        self.stream_buffer = stream_buffer
+        self.request_iterator = iter(stream_buffer)
         self.response_processing_thread = threading.Thread(
             target=self.process_responses, name="NR-StreamingRpc-process-responses"
         )
@@ -69,8 +70,8 @@ class StreamingRpc(object):
         self.rpc = self.channel.stream_stream(self.PATH, Span.SerializeToString, RecordStatus.FromString)
 
     def create_response_iterator(self):
-        with self.request_iterator._notify:
-            self.request_iterator.reconnect()
+        with self.stream_buffer._notify:
+            self.request_iterator = iter(self.stream_buffer)
             self.request_iterator._stream = reponse_iterator = self.rpc(self.request_iterator, metadata=self.metadata)
             return reponse_iterator
 
@@ -121,10 +122,8 @@ class StreamingRpc(object):
                             "to reestablish the stream immediately."
                         )
 
-                        _logger.debug("Stream buffer ID: %s - %s" % (str(id(self.request_iterator)), str(id(self))))
-
                         # Reconnect channel for load balancing
-                        self.request_iterator.disconnect()
+                        self.request_iterator.shutdown()
                         self.channel.close()
                         self.create_channel()
 
@@ -167,7 +166,7 @@ class StreamingRpc(object):
                             )
 
                         # Reconnect channel with backoff
-                        self.request_iterator.disconnect()
+                        self.request_iterator.shutdown()
                         self.channel.close()
                         self.notify.wait(retry_time)
                         if self.closed:

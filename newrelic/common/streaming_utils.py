@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import collections
+import logging
 import threading
 
 try:
@@ -20,9 +21,8 @@ try:
 except:
     AttributeValue = None
 
+_logger = logging.getLogger(__name__)
 
-import logging
-logger = logging.getLogger(__name__)
 
 class StreamBuffer(object):
 
@@ -30,10 +30,8 @@ class StreamBuffer(object):
         self._queue = collections.deque(maxlen=maxlen)
         self._notify = self.condition()
         self._shutdown = False
-        self._disconnect = False
         self._seen = 0
         self._dropped = 0
-        self._stream = None
 
     @staticmethod
     def condition(*args, **kwargs):
@@ -43,15 +41,6 @@ class StreamBuffer(object):
         with self._notify:
             self._shutdown = True
             self._notify.notify_all()
-
-    def disconnect(self):
-        with self._notify:
-            self._disconnect = True
-            self._stream = None
-            self._notify.notify_all()
-
-    def reconnect(self):
-        self._disconnect = False
 
     def put(self, item):
         with self._notify:
@@ -78,25 +67,46 @@ class StreamBuffer(object):
 
         return seen, dropped
 
-    def __next__(self):
-        while True:
-            with self._notify:
-                if self._shutdown or self._disconnect or (self._stream and self._stream.code() is not None):
-                    # When a gRPC stream receives a server side disconnect (usually in the form of an OK code)
-                    # the item it is waiting to consume from the iterator will not be sent, and
-                    # will inevitably be lost.
+    def __iter__(self):
+        return StreamBufferIterator(self)
 
-                    # StopIteration raised when the StreamBuffer has been shutdown, during a reconnect,
-                    # or when the stream is about to close and will lose the next item in the queue
-                    logger.debug("Stream buffer disconnected or shutdown. Refusing to iterate.")
+class StreamBufferIterator(object):
+
+    def __init__(self, stream_buffer):
+        self.stream_buffer = stream_buffer
+        self._notify = self.stream_buffer._notify
+        self._shutdown = False
+        self._stream = None
+
+    def shutdown(self):
+        with self._notify:
+            self._shutdown = True
+            self._notify.notify_all()
+
+    def stream_closed(self):
+        return self._shutdown or self.stream_buffer._shutdown or (self._stream and self._stream.done())
+
+    def __next__(self):
+        with self._notify:
+            while True:
+                # When a gRPC stream receives a server side disconnect (usually in the form of an OK code)
+                # the item it is waiting to consume from the iterator will not be sent, and will inevitably 
+                # be lost. To prevent this, StopIteration is raised by shutting down the iterator and 
+                # notifying to allow the thread to exit. Iterators cannot be reused or race conditions may
+                # occur between iterator shutdown and restart, so a new iterator must be created from the
+                # streaming buffer.
+                if self.stream_closed():
+                    _logger.debug("gRPC stream is closed. Shutting down and refusing to iterate.")
+                    if not self._shutdown:
+                        self.shutdown()
                     raise StopIteration
 
                 try:
-                    return self._queue.popleft()
+                    return self.stream_buffer._queue.popleft()
                 except IndexError:
                     pass
 
-                if not self._shutdown and not self._disconnect and not self._queue:
+                if not self.stream_closed() and not self.stream_buffer._queue:
                     self._notify.wait()
 
     next = __next__
